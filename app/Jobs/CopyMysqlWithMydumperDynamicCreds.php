@@ -148,7 +148,7 @@ class CopyMysqlWithMydumperDynamicCreds implements ShouldQueue
     }
 
     /**
-     * Run mydumper to export the source database, then import into destination using mysql client.
+     * Run mysqldump/mydumper to export the source database, then import into destination using mysql client.
      */
     protected function runMydumperAndMyloader(): void
     {
@@ -167,6 +167,53 @@ class CopyMysqlWithMydumperDynamicCreds implements ShouldQueue
 
         File::ensureDirectoryExists($dumpDirectory);
 
+        $this->dumpSchemaWithMysqldump($sourceConfig, $dumpDirectory);
+        $this->runMydumper($sourceConfig, $dumpDirectory);
+        $this->stripDumpFileHeaders($dumpDirectory);
+        $this->restoreSchemaWithMysql($destinationConfig, $dumpDirectory);
+        $this->importDumpDataWithMysql($destinationConfig, $dumpDirectory);
+    }
+
+    /**
+     * Dump only the schema of the source database using mysqldump.
+     *
+     * @param  array<string, mixed>  $sourceConfig
+     */
+    protected function dumpSchemaWithMysqldump(array $sourceConfig, string $dumpDirectory): void
+    {
+        $sourceArgs = $this->buildMysqlCliArgs($sourceConfig, $this->sourceDatabase);
+
+        $mysqldumpCommand = array_merge(
+            ['mysqldump'],
+            $sourceArgs,
+            [
+                '--no-data',
+                '--routines',
+                '--triggers',
+                '--events',
+                '--single-transaction',
+                '--set-gtid-purged=OFF'
+            ],
+        );
+
+        $mysqldumpResult = Process::timeout(0)->run($mysqldumpCommand);
+
+        if ($mysqldumpResult->failed()) {
+            throw new RuntimeException('mysqldump (schema) failed with error: '.$mysqldumpResult->errorOutput());
+        }
+
+        $schemaDumpPath = $dumpDirectory.'/schema.sql';
+
+        File::put($schemaDumpPath, $mysqldumpResult->output());
+    }
+
+    /**
+     * Run mydumper to export the data of the source database (without schema).
+     *
+     * @param  array<string, mixed>  $sourceConfig
+     */
+    protected function runMydumper(array $sourceConfig, string $dumpDirectory): void
+    {
         $sourceArgs = $this->buildMysqlCliArgs($sourceConfig, $this->sourceDatabase);
 
         $mydumperCommand = array_merge(
@@ -188,16 +235,37 @@ class CopyMysqlWithMydumperDynamicCreds implements ShouldQueue
         if ($mydumperResult->failed()) {
             throw new RuntimeException('mydumper failed with error: '.$mydumperResult->errorOutput());
         }
-
-        $this->stripDumpFileHeaders($dumpDirectory);
-
-        $this->importDumpWithMysql($destinationConfig, $dumpDirectory);
     }
 
     /**
-     * Import each dump file into the destination database using the mysql client.
+     * Restore the schema into the destination database using the mysql client.
      */
-    protected function importDumpWithMysql(array $destinationConfig, string $dumpDirectory): void
+    protected function restoreSchemaWithMysql(array $destinationConfig, string $dumpDirectory): void
+    {
+        $schemaPath = $dumpDirectory.'/schema.sql';
+
+        if (! File::exists($schemaPath)) {
+            throw new RuntimeException('Schema dump file [schema.sql] is missing.');
+        }
+
+        $destinationArgs = $this->buildMysqlCliArgs($destinationConfig, $this->destinationDatabase);
+        $mysqlCommand = array_merge(['mysql'], $destinationArgs);
+
+        $sql = File::get($schemaPath);
+
+        $result = Process::timeout(0)->input($sql)->run($mysqlCommand);
+
+        if ($result->failed()) {
+            throw new RuntimeException(
+                'mysql schema import failed for schema.sql: '.$result->errorOutput()
+            );
+        }
+    }
+
+    /**
+     * Import each data dump file into the destination database using the mysql client.
+     */
+    protected function importDumpDataWithMysql(array $destinationConfig, string $dumpDirectory): void
     {
         $destinationArgs = $this->buildMysqlCliArgs($destinationConfig, $this->destinationDatabase);
         $mysqlCommand = array_merge(['mysql'], $destinationArgs);
@@ -205,6 +273,10 @@ class CopyMysqlWithMydumperDynamicCreds implements ShouldQueue
         $files = File::glob($dumpDirectory.'/*.sql');
 
         foreach ($files as $path) {
+            if (basename($path) === 'schema.sql') {
+                continue;
+            }
+
             $sql = 'SET FOREIGN_KEY_CHECKS=0;'."\n".File::get($path);
             $result = Process::timeout(0)->input($sql)->run($mysqlCommand);
 
@@ -217,23 +289,38 @@ class CopyMysqlWithMydumperDynamicCreds implements ShouldQueue
     }
 
     /**
-     * Strip specific header lines from each dump file in the directory.
+     * Strip SET statements from the header of each dump file in the directory.
      */
     protected function stripDumpFileHeaders(string $dumpDirectory): void
     {
-        $linesToStrip = [
-            '/*!40101 SET NAMES binary*/;',
-            '/*!40014 SET FOREIGN_KEY_CHECKS=0*/;',
-        ];
-
         $files = File::glob($dumpDirectory.'/*.sql');
 
         foreach ($files as $path) {
             $content = File::get($path);
             $lines = preg_split('/\r\n|\r|\n/', $content);
             $filtered = collect($lines)
-                ->reject(fn (string $line): bool => in_array(trim($line), $linesToStrip, true))
+                ->values()
+                ->reject(function (string $line, int $index): bool {
+                    $trimmed = trim($line);
+
+                    if ($trimmed === '') {
+                        return false;
+                    }
+
+                    // Only treat the first 50 lines as "header" and strip any
+                    // SET statements (including commented ones) found there.
+                    if ($index < 50 && preg_match('/\bSET\b/i', $trimmed) === 1) {
+                        return true;
+                    }
+
+                    if ($index < 50 && str_starts_with($trimmed, '/*!') && str_contains($trimmed, 'SET ')) {
+                        return true;
+                    }
+
+                    return false;
+                })
                 ->implode("\n");
+
             File::put($path, $filtered);
         }
     }

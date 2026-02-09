@@ -179,6 +179,8 @@ test('stripDumpFileHeaders removes target header lines from sql files', function
     $content = <<<'SQL'
 /*!40101 SET NAMES binary*/;
 /*!40014 SET FOREIGN_KEY_CHECKS=0*/;
+SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT;
+/*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
 CREATE TABLE `table1` (
   `id` int NOT NULL,
   PRIMARY KEY (`id`)
@@ -202,6 +204,8 @@ SQL;
 
     expect($result)->not->toContain('/*!40101 SET NAMES binary*/;');
     expect($result)->not->toContain('/*!40014 SET FOREIGN_KEY_CHECKS=0*/;');
+    expect($result)->not->toContain('SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT;');
+    expect($result)->not->toContain('/*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;');
     expect($result)->toContain('CREATE TABLE `table1`');
 
     File::deleteDirectory($dumpDir);
