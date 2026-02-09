@@ -148,7 +148,7 @@ class CopyMysqlWithMydumperDynamicCreds implements ShouldQueue
     }
 
     /**
-     * Run the mydumper and myloader commands to copy the database.
+     * Run mydumper to export the source database, then import into destination using mysql client.
      */
     protected function runMydumperAndMyloader(): void
     {
@@ -191,21 +191,28 @@ class CopyMysqlWithMydumperDynamicCreds implements ShouldQueue
 
         $this->stripDumpFileHeaders($dumpDirectory);
 
+        $this->importDumpWithMysql($destinationConfig, $dumpDirectory);
+    }
+
+    /**
+     * Import each dump file into the destination database using the mysql client.
+     */
+    protected function importDumpWithMysql(array $destinationConfig, string $dumpDirectory): void
+    {
         $destinationArgs = $this->buildMysqlCliArgs($destinationConfig, $this->destinationDatabase);
+        $mysqlCommand = array_merge(['mysql'], $destinationArgs);
 
-        $myloaderCommand = array_merge(
-            ['myloader'],
-            $destinationArgs,
-            [
-                '--threads='.$this->threads,
-                '--directory='.$dumpDirectory,
-            ],
-        );
+        $files = File::glob($dumpDirectory.'/*.sql');
 
-        $myloaderResult = Process::timeout(0)->run($myloaderCommand);
+        foreach ($files as $path) {
+            $sql = 'SET FOREIGN_KEY_CHECKS=0;'."\n".File::get($path);
+            $result = Process::timeout(0)->input($sql)->run($mysqlCommand);
 
-        if ($myloaderResult->failed()) {
-            throw new RuntimeException('myloader failed with error: '.$myloaderResult->errorOutput());
+            if ($result->failed()) {
+                throw new RuntimeException(
+                    'mysql import failed for '.basename($path).': '.$result->errorOutput()
+                );
+            }
         }
     }
 
