@@ -4,8 +4,8 @@ namespace App\Jobs;
 
 use App\Models\DbCopy;
 use App\Services\DbCopyWebhookNotifier;
-use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
+use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Process;
@@ -179,7 +179,7 @@ class CopyMysqlWithMydumperDynamicCreds implements ShouldQueue
                 '--less-locking',
                 '--no-locks',
                 '--no-schemas',
-                '--skip-tz-utc'
+                '--skip-tz-utc',
             ],
         );
 
@@ -188,6 +188,8 @@ class CopyMysqlWithMydumperDynamicCreds implements ShouldQueue
         if ($mydumperResult->failed()) {
             throw new RuntimeException('mydumper failed with error: '.$mydumperResult->errorOutput());
         }
+
+        $this->stripDumpFileHeaders($dumpDirectory);
 
         $destinationArgs = $this->buildMysqlCliArgs($destinationConfig, $this->destinationDatabase);
 
@@ -204,6 +206,28 @@ class CopyMysqlWithMydumperDynamicCreds implements ShouldQueue
 
         if ($myloaderResult->failed()) {
             throw new RuntimeException('myloader failed with error: '.$myloaderResult->errorOutput());
+        }
+    }
+
+    /**
+     * Strip specific header lines from each dump file in the directory.
+     */
+    protected function stripDumpFileHeaders(string $dumpDirectory): void
+    {
+        $linesToStrip = [
+            '/*!40101 SET NAMES binary*/;',
+            '/*!40014 SET FOREIGN_KEY_CHECKS=0*/;',
+        ];
+
+        $files = File::glob($dumpDirectory.'/*.sql');
+
+        foreach ($files as $path) {
+            $content = File::get($path);
+            $lines = preg_split('/\r\n|\r|\n/', $content);
+            $filtered = collect($lines)
+                ->reject(fn (string $line): bool => in_array(trim($line), $linesToStrip, true))
+                ->implode("\n");
+            File::put($path, $filtered);
         }
     }
 

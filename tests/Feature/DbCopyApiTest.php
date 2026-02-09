@@ -4,6 +4,7 @@ use App\Jobs\CopyMysqlWithMydumperDynamicCreds;
 use App\Models\DbCopy;
 use App\Models\User;
 use App\Services\DbCopyWebhookNotifier;
+use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Str;
@@ -142,15 +143,8 @@ test('webhook is called with signed payload on status changes', function (): voi
     ]);
 
     // Use a test-specific subclass that skips the external commands.
-    $job = new class (
-        $dbCopy->id,
-        'mysql',
-        'source_db1',
-        'mysql',
-        'dest_db1',
-        4,
-        true
-    ) extends CopyMysqlWithMydumperDynamicCreds {
+    $job = new class($dbCopy->id, 'mysql', 'source_db1', 'mysql', 'dest_db1', 4, true) extends CopyMysqlWithMydumperDynamicCreds
+    {
         protected function prepareDestinationDatabase(): void {}
 
         protected function runMydumperAndMyloader(): void {}
@@ -177,3 +171,38 @@ test('webhook is called with signed payload on status changes', function (): voi
     });
 });
 
+test('stripDumpFileHeaders removes target header lines from sql files', function (): void {
+    $dumpDir = storage_path('app/test-dump-strip-'.uniqid());
+    File::ensureDirectoryExists($dumpDir);
+
+    $sqlPath = $dumpDir.'/table1.sql';
+    $content = <<<'SQL'
+/*!40101 SET NAMES binary*/;
+/*!40014 SET FOREIGN_KEY_CHECKS=0*/;
+CREATE TABLE `table1` (
+  `id` int NOT NULL,
+  PRIMARY KEY (`id`)
+);
+SQL;
+    File::put($sqlPath, $content);
+
+    $job = new CopyMysqlWithMydumperDynamicCreds(
+        dbCopyId: 'test-id',
+        sourceConnection: 'mysql',
+        sourceDatabase: 'source',
+        destinationConnection: 'mysql',
+        destinationDatabase: 'dest',
+    );
+
+    $method = (new \ReflectionClass($job))->getMethod('stripDumpFileHeaders');
+    $method->setAccessible(true);
+    $method->invoke($job, $dumpDir);
+
+    $result = File::get($sqlPath);
+
+    expect($result)->not->toContain('/*!40101 SET NAMES binary*/;');
+    expect($result)->not->toContain('/*!40014 SET FOREIGN_KEY_CHECKS=0*/;');
+    expect($result)->toContain('CREATE TABLE `table1`');
+
+    File::deleteDirectory($dumpDir);
+});
