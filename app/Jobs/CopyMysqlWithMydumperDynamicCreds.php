@@ -185,7 +185,12 @@ class CopyMysqlWithMydumperDynamicCreds implements ShouldQueue
 
         $mysqldumpCommand = array_merge(
             ['mysqldump'],
-            $sourceArgs,
+            [
+                '-h='.$sourceConfig['host'],
+                '-u='.$sourceConfig['username'],
+                '-p='.$sourceConfig['password'],
+                $this->sourceDatabase,
+            ],
             [
                 '--no-data',
                 '--routines',
