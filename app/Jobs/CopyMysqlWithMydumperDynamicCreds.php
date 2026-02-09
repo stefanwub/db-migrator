@@ -175,6 +175,7 @@ class CopyMysqlWithMydumperDynamicCreds implements ShouldQueue
             [
                 '--threads='.$this->threads,
                 '--outputdir='.$dumpDirectory,
+                '--trx-consistency-only'
             ],
         );
 
