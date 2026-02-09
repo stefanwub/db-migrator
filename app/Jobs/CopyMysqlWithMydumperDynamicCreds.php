@@ -186,10 +186,9 @@ class CopyMysqlWithMydumperDynamicCreds implements ShouldQueue
         $mysqldumpCommand = array_merge(
             ['mysqldump'],
             [
-                '-h='.$sourceConfig['host'],
-                '-u='.$sourceConfig['username'],
-                '-p='.$sourceConfig['password'],
-                $this->sourceDatabase,
+                '-h '.$sourceConfig['host'],
+                '-u '.$sourceConfig['username'],
+                '-p '.$sourceConfig['password']
             ],
             [
                 '--no-data',
@@ -199,6 +198,9 @@ class CopyMysqlWithMydumperDynamicCreds implements ShouldQueue
                 '--single-transaction',
                 '--set-gtid-purged=OFF'
             ],
+            [
+                $this->sourceDatabase
+            ]
         );
 
         $mysqldumpResult = Process::timeout(0)->run($mysqldumpCommand);
