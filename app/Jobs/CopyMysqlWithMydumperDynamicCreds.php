@@ -169,7 +169,7 @@ class CopyMysqlWithMydumperDynamicCreds implements ShouldQueue
 
         $this->dumpSchemaWithMysqldump($sourceConfig, $dumpDirectory);
         $this->runMydumper($sourceConfig, $dumpDirectory);
-        $this->stripDumpFileHeaders($dumpDirectory);
+        // $this->stripDumpFileHeaders($dumpDirectory);
         $this->restoreSchemaWithMysql($destinationConfig, $dumpDirectory);
         $this->importDumpDataWithMysql($destinationConfig, $dumpDirectory);
     }
