@@ -178,7 +178,7 @@ class CopyMysqlWithMydumperDynamicCreds implements ShouldQueue
                 '--trx-consistency-only',
                 '--less-locking',
                 '--no-locks',
-                '--no-schema',
+                '--no-schemas',
                 '--skip-tz-utc'
             ],
         );
