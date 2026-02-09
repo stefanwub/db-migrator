@@ -187,7 +187,7 @@ class CopyMysqlWithMydumperDynamicCreds implements ShouldQueue
             ['mysqldump'],
             [
                 '-h'.$sourceConfig['host'],
-                '-u '.$sourceConfig['username'],
+                '-u'.$sourceConfig['username'],
                 '-p '.$sourceConfig['password']
             ],
             [
