@@ -172,6 +172,8 @@ class CopyMysqlWithMydumperDynamicCreds implements ShouldQueue
         // $this->stripDumpFileHeaders($dumpDirectory);
         $this->restoreSchemaWithMysql($destinationConfig, $dumpDirectory);
         $this->importDumpDataWithMysql($destinationConfig, $dumpDirectory);
+
+        File::deleteDirectory($dumpDirectory);
     }
 
     /**
@@ -188,7 +190,7 @@ class CopyMysqlWithMydumperDynamicCreds implements ShouldQueue
             [
                 '-h'.$sourceConfig['host'],
                 '-u'.$sourceConfig['username'],
-                '-p'.$sourceConfig['password']
+                '-p'.$sourceConfig['password'],
             ],
             [
                 '--no-data',
@@ -196,10 +198,10 @@ class CopyMysqlWithMydumperDynamicCreds implements ShouldQueue
                 '--triggers',
                 '--events',
                 '--single-transaction',
-                '--set-gtid-purged=OFF'
+                '--set-gtid-purged=OFF',
             ],
             [
-                $this->sourceDatabase
+                $this->sourceDatabase,
             ]
         );
 
