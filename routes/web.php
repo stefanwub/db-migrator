@@ -45,6 +45,7 @@ Route::get('db-copies/{dbCopy}', function (Request $request, DbCopy $dbCopy) {
             'source_db' => $dbCopy->source_db,
             'dest_connection' => $dbCopy->dest_connection,
             'dest_db' => $dbCopy->dest_db,
+            'total_source_size' => $dbCopy->total_source_size,
             'callback_url' => $dbCopy->callback_url,
             'started_at' => $dbCopy->started_at,
             'finished_at' => $dbCopy->finished_at,
@@ -67,7 +68,7 @@ Route::get('db-copies/{dbCopy}', function (Request $request, DbCopy $dbCopy) {
                 'updated_at' => $row->updated_at,
             ];
         }),
-        'source_total_size_bytes' => $dbCopy->rows->sum('source_size'),
+        'source_total_size_bytes' => $dbCopy->total_source_size,
     ]);
 })->middleware(['auth', 'verified'])->name('db-copies.show');
 

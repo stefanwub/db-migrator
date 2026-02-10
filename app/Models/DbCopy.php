@@ -35,6 +35,7 @@ class DbCopy extends Model
         'source_db',
         'dest_connection',
         'dest_db',
+        'total_source_size',
         'callback_url',
         'started_at',
         'finished_at',
@@ -51,6 +52,7 @@ class DbCopy extends Model
     {
         return [
             'progress' => 'integer',
+            'total_source_size' => 'integer',
             'started_at' => 'immutable_datetime',
             'finished_at' => 'immutable_datetime',
         ];

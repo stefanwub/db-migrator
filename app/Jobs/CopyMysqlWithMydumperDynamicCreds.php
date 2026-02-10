@@ -169,6 +169,7 @@ class CopyMysqlWithMydumperDynamicCreds implements ShouldQueue
 
         File::ensureDirectoryExists($dumpDirectory);
 
+        $this->recordDatabaseTotalSourceSize($dbCopy);
         $this->dumpSchemaWithMysqldump($sourceConfig, $dumpDirectory);
         $this->runMydumper($sourceConfig, $dumpDirectory, $dbCopy);
         $this->recordSourceStats($dbCopy);
@@ -372,6 +373,27 @@ class CopyMysqlWithMydumperDynamicCreds implements ShouldQueue
                 'source_size' => $source['size'],
             ]);
         }
+    }
+
+    /**
+     * Calculate and store the total source database size in bytes.
+     */
+    protected function recordDatabaseTotalSourceSize(DbCopy $dbCopy): void
+    {
+        $connection = DB::connection($this->sourceConnection);
+
+        $result = $connection->selectOne(
+            'SELECT SUM(DATA_LENGTH + INDEX_LENGTH) as size_bytes
+                FROM information_schema.TABLES
+                WHERE TABLE_SCHEMA = ?',
+            [$this->sourceDatabase],
+        );
+
+        $totalSize = (int) ($result->size_bytes ?? 0);
+
+        $dbCopy->update([
+            'total_source_size' => $totalSize,
+        ]);
     }
 
     /**
