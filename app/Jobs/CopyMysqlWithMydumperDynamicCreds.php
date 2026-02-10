@@ -381,11 +381,27 @@ class CopyMysqlWithMydumperDynamicCreds implements ShouldQueue
                 'status' => 'verified',
             ]);
 
+            if ($source['row_count'] !== $destination['row_count'] && $source['size'] !== $destination['size']) {
+                $row->update([
+                    'status' => 'failed',
+                    'error_message' => 'Row count and size both mismatch for '.$row->name,
+                ]);
+                throw new RuntimeException('Row count and size both mismatch for '.$row->name);
+            }
+
             if ($source['row_count'] !== $destination['row_count']) {
+                $row->update([
+                    'status' => 'failed',
+                    'error_message' => 'Row count mismatch for '.$row->name,
+                ]);
                 throw new RuntimeException('Row count mismatch for '.$row->name);
             }
 
             if ($source['size'] !== $destination['size']) {
+                $row->update([
+                    'status' => 'failed',
+                    'error_message' => 'Row size mismatch for '.$row->name,
+                ]);
                 throw new RuntimeException('Row size mismatch for '.$row->name);
             }
         }
@@ -393,6 +409,8 @@ class CopyMysqlWithMydumperDynamicCreds implements ShouldQueue
 
     /**
      * Get row count and size statistics for the given tables in a database.
+     *
+     * Uses COUNT(*) for exact row counts and information_schema for size.
      *
      * @param  array<int, string>  $tableNames
      * @return array<string, array{row_count: int, size: int}>
@@ -403,22 +421,32 @@ class CopyMysqlWithMydumperDynamicCreds implements ShouldQueue
             return [];
         }
 
-        $placeholders = implode(',', array_fill(0, count($tableNames), '?'));
-
-        $results = DB::connection($connectionName)->select(
-            "SELECT TABLE_NAME as name, TABLE_ROWS as row_count, DATA_LENGTH + INDEX_LENGTH as size_bytes
-                FROM information_schema.TABLES
-                WHERE TABLE_SCHEMA = ?
-                  AND TABLE_NAME IN ({$placeholders})",
-            array_merge([$database], $tableNames),
-        );
+        $connection = DB::connection($connectionName);
 
         $stats = [];
 
-        foreach ($results as $result) {
-            $stats[$result->name] = [
-                'row_count' => (int) $result->row_count,
-                'size' => (int) $result->size_bytes,
+        foreach ($tableNames as $tableName) {
+            $escapedDatabase = str_replace('`', '``', $database);
+            $escapedTable = str_replace('`', '``', $tableName);
+
+            $rowCountResult = $connection->selectOne(
+                "SELECT COUNT(*) as aggregate FROM `{$escapedDatabase}`.`{$escapedTable}`"
+            );
+
+            $rowCount = (int) ($rowCountResult->aggregate ?? 0);
+
+            $sizeResult = $connection->selectOne(
+                'SELECT DATA_LENGTH + INDEX_LENGTH as size_bytes
+                    FROM information_schema.TABLES
+                    WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?',
+                [$database, $tableName],
+            );
+
+            $size = (int) ($sizeResult->size_bytes ?? 0);
+
+            $stats[$tableName] = [
+                'row_count' => $rowCount,
+                'size' => $size,
             ];
         }
 
