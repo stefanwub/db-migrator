@@ -73,4 +73,58 @@ class DbCopy extends Model
     {
         return $this->hasMany(DbCopyRow::class);
     }
+
+    /**
+     * Get the duration of the copy in seconds, if available.
+     */
+    public function durationSeconds(): ?int
+    {
+        if ($this->started_at === null || $this->finished_at === null) {
+            return null;
+        }
+
+        return $this->started_at->diffInSeconds($this->finished_at);
+    }
+
+    /**
+     * Get the duration of the copy in seconds, if available.
+     */
+    public function durationMilliseconds(): ?int
+    {
+        if ($this->started_at === null || $this->finished_at === null) {
+            return null;
+        }
+
+        return $this->started_at->diffInMilliseconds($this->finished_at);
+    }
+
+    /**
+     * Get a human-readable duration between start and finish.
+     */
+    public function durationForDisplay(): ?string
+    {
+        $seconds = $this->durationSeconds();
+
+        if ($seconds === null) {
+            return null;
+        }
+
+        $hours = intdiv($seconds, 3600);
+        $minutes = intdiv($seconds % 3600, 60);
+        $remainingSeconds = $seconds % 60;
+
+        $parts = [];
+
+        if ($hours > 0) {
+            $parts[] = $hours.'h';
+        }
+
+        if ($minutes > 0 || $hours > 0) {
+            $parts[] = $minutes.'m';
+        }
+
+        $parts[] = $remainingSeconds.'s';
+
+        return implode(' ', $parts);
+    }
 }

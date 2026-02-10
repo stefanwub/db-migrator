@@ -15,6 +15,8 @@ type DbCopy = {
     callback_url: string;
     started_at: string | null;
     finished_at: string | null;
+    duration_seconds: number | null;
+    duration_human: string | null;
     last_error: string | null;
     created_at: string;
     updated_at: string;
@@ -170,6 +172,12 @@ const statusCounts = computed(() => {
                                     scope="col"
                                     class="px-4 py-2 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground"
                                 >
+                                    Duration
+                                </th>
+                                <th
+                                    scope="col"
+                                    class="px-4 py-2 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground"
+                                >
                                     Error
                                 </th>
                             </tr>
@@ -239,6 +247,9 @@ const statusCounts = computed(() => {
                                 </td>
                                 <td class="px-4 py-2 text-xs text-muted-foreground">
                                     {{ copy.finished_at ?? '—' }}
+                                </td>
+                                <td class="px-4 py-2 text-xs text-muted-foreground">
+                                    {{ copy.duration_human ?? '—' }}
                                 </td>
                                 <td class="max-w-48 px-4 py-2 text-xs text-red-600">
                                     <span class="line-clamp-2">

@@ -158,6 +158,25 @@ return [
             ]) : [],
         ],
 
+        'rds-cluster-2' => [
+            'driver' => 'mysql',
+            'host' => env('RDS_DB_HOST_CLUSTER_2', '127.0.0.1'),
+            'port' => env('RDS_DB_PORT_CLUSTER_2', '3306'),
+            'database' => env('RDS_DB_DATABASE_CLUSTER_2', 'laravel'),
+            'username' => env('RDS_DB_USERNAME_CLUSTER_2', 'root'),
+            'password' => env('RDS_DB_PASSWORD_CLUSTER_2', ''),
+            'unix_socket' => env('DB_SOCKET', ''),
+            'charset' => env('DB_CHARSET', 'utf8mb4'),
+            'collation' => env('DB_COLLATION', 'utf8mb4_unicode_ci'),
+            'prefix' => '',
+            'prefix_indexes' => true,
+            'strict' => true,
+            'engine' => null,
+            'options' => extension_loaded('pdo_mysql') ? array_filter([
+                (PHP_VERSION_ID >= 80500 ? \Pdo\Mysql::ATTR_SSL_CA : \PDO::MYSQL_ATTR_SSL_CA) => env('MYSQL_ATTR_SSL_CA'),
+            ]) : [],
+        ],
+
         'mariadb' => [
             'driver' => 'mariadb',
             'url' => env('DB_URL'),

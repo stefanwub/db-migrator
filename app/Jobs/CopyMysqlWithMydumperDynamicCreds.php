@@ -254,9 +254,28 @@ class CopyMysqlWithMydumperDynamicCreds implements ShouldQueue
      */
     protected function runMydumper(array $sourceConfig, string $dumpDirectory, DbCopy $dbCopy): void
     {
+        $mydumperCommand = $this->buildMydumperCommand($sourceConfig, $dumpDirectory);
+
+        $mydumperResult = Process::timeout(0)->run($mydumperCommand);
+
+        if ($mydumperResult->failed()) {
+            throw new RuntimeException('mydumper failed with error: '.$mydumperResult->errorOutput());
+        }
+
+        $this->createRowsFromDumpFiles($dbCopy, $dumpDirectory);
+    }
+
+    /**
+     * Build the mydumper command to export data from the source database.
+     *
+     * @param  array<string, mixed>  $sourceConfig
+     * @return array<int, string>
+     */
+    protected function buildMydumperCommand(array $sourceConfig, string $dumpDirectory): array
+    {
         $sourceArgs = $this->buildMysqlCliArgs($sourceConfig, $this->sourceDatabase);
 
-        $mydumperCommand = array_merge(
+        $command = array_merge(
             ['mydumper'],
             $sourceArgs,
             [
@@ -270,13 +289,9 @@ class CopyMysqlWithMydumperDynamicCreds implements ShouldQueue
             ],
         );
 
-        $mydumperResult = Process::timeout(0)->run($mydumperCommand);
+        $command[] = '--regex=^(?!('.$this->sourceDatabase.'.sent_mail_bodies$))';
 
-        if ($mydumperResult->failed()) {
-            throw new RuntimeException('mydumper failed with error: '.$mydumperResult->errorOutput());
-        }
-
-        $this->createRowsFromDumpFiles($dbCopy, $dumpDirectory);
+        return $command;
     }
 
     /**

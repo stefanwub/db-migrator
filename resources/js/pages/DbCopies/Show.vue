@@ -29,6 +29,9 @@ type DbCopy = {
     callback_url: string;
     started_at: string | null;
     finished_at: string | null;
+    duration_seconds: number | null;
+    duration_milliseconds: number | null;
+    duration_human: string | null;
     last_error: string | null;
     created_at: string;
     updated_at: string;
@@ -145,6 +148,9 @@ function openRowErrorModal(message: string | null) {
                     </div>
                     <div class="mt-1 text-xs text-muted-foreground">
                         Finished: {{ dbCopy.finished_at ?? '—' }}
+                    </div>
+                    <div class="mt-1 text-xs text-muted-foreground">
+                        Duration: {{ dbCopy.duration_human ?? '—' }} ({{ dbCopy.duration_milliseconds }} ms)
                     </div>
                 </div>
 

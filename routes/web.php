@@ -20,7 +20,27 @@ Route::get('db-copies', function (Request $request) {
     $dbCopies = DbCopy::query()
         ->where('created_by_user_id', $request->user()?->id)
         ->latest()
-        ->paginate(20);
+        ->paginate(20)
+        ->through(function (DbCopy $dbCopy) {
+            return [
+                'id' => $dbCopy->id,
+                'status' => $dbCopy->status,
+                'progress' => $dbCopy->progress,
+                'source_connection' => $dbCopy->source_connection,
+                'source_db' => $dbCopy->source_db,
+                'dest_connection' => $dbCopy->dest_connection,
+                'dest_db' => $dbCopy->dest_db,
+                'callback_url' => $dbCopy->callback_url,
+                'started_at' => $dbCopy->started_at,
+                'finished_at' => $dbCopy->finished_at,
+                'duration_seconds' => $dbCopy->durationSeconds(),
+                'duration_milliseconds' => $dbCopy->durationMilliseconds(),
+                'duration_human' => $dbCopy->durationForDisplay(),
+                'last_error' => $dbCopy->last_error,
+                'created_at' => $dbCopy->created_at,
+                'updated_at' => $dbCopy->updated_at,
+            ];
+        });
 
     return Inertia::render('DbCopies/Index', [
         'dbCopies' => $dbCopies,
@@ -49,6 +69,9 @@ Route::get('db-copies/{dbCopy}', function (Request $request, DbCopy $dbCopy) {
             'callback_url' => $dbCopy->callback_url,
             'started_at' => $dbCopy->started_at,
             'finished_at' => $dbCopy->finished_at,
+            'duration_seconds' => $dbCopy->durationSeconds(),
+            'duration_milliseconds' => $dbCopy->durationMilliseconds(),
+            'duration_human' => $dbCopy->durationForDisplay(),
             'last_error' => $dbCopy->last_error,
             'created_at' => $dbCopy->created_at,
             'updated_at' => $dbCopy->updated_at,
