@@ -339,7 +339,7 @@ class CopyMysqlWithMydumperDynamicCreds implements ShouldQueue
             // by the operating system, avoiding loading large dumps into PHP memory.
             $commandLine = implode(' ', array_map('escapeshellarg', $mysqlArgs)).' < '.escapeshellarg($path);
 
-            $result = Process::timeout(0)->fromShellCommandline($commandLine)->run();
+            $result = Process::timeout(0)->run($commandLine);
 
             if ($result->failed()) {
                 DbCopyRow::query()
