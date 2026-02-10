@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Head } from '@inertiajs/vue3';
+import { Head, Link } from '@inertiajs/vue3';
 import { computed } from 'vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import type { BreadcrumbItem } from '@/types';
@@ -181,11 +181,12 @@ const statusCounts = computed(() => {
                                 class="hover:bg-muted/40"
                             >
                                 <td class="max-w-40 truncate px-4 py-2">
-                                    <span
-                                        class="rounded bg-muted px-2 py-0.5 text-xs font-mono"
+                                    <Link
+                                        :href="`/db-copies/${copy.id}`"
+                                        class="rounded bg-muted px-2 py-0.5 text-xs font-mono hover:bg-muted/80"
                                     >
                                         {{ copy.id }}
-                                    </span>
+                                    </Link>
                                 </td>
                                 <td class="px-4 py-2">
                                     <div class="text-xs text-muted-foreground">

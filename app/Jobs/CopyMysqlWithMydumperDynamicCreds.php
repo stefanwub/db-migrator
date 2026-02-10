@@ -3,6 +3,7 @@
 namespace App\Jobs;
 
 use App\Models\DbCopy;
+use App\Models\DbCopyRow;
 use App\Services\DbCopyWebhookNotifier;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
@@ -45,7 +46,8 @@ class CopyMysqlWithMydumperDynamicCreds implements ShouldQueue
             $notifier->notify($dbCopy);
 
             $this->prepareDestinationDatabase();
-            $this->runMydumperAndMyloader();
+            $this->runMydumperAndMyloader($dbCopy);
+            $this->verifyCopiedRows($dbCopy);
 
             $this->markSucceeded($dbCopy);
             $notifier->notify($dbCopy);
@@ -150,7 +152,7 @@ class CopyMysqlWithMydumperDynamicCreds implements ShouldQueue
     /**
      * Run mysqldump/mydumper to export the source database, then import into destination using mysql client.
      */
-    protected function runMydumperAndMyloader(): void
+    protected function runMydumperAndMyloader(DbCopy $dbCopy): void
     {
         $sourceConfig = config("database.connections.{$this->sourceConnection}");
         $destinationConfig = config("database.connections.{$this->destinationConnection}");
@@ -168,10 +170,9 @@ class CopyMysqlWithMydumperDynamicCreds implements ShouldQueue
         File::ensureDirectoryExists($dumpDirectory);
 
         $this->dumpSchemaWithMysqldump($sourceConfig, $dumpDirectory);
-        $this->runMydumper($sourceConfig, $dumpDirectory);
-        // $this->stripDumpFileHeaders($dumpDirectory);
+        $this->runMydumper($sourceConfig, $dumpDirectory, $dbCopy);
         $this->restoreSchemaWithMysql($destinationConfig, $dumpDirectory);
-        $this->importDumpDataWithMysql($destinationConfig, $dumpDirectory);
+        $this->importDumpDataWithMysql($destinationConfig, $dumpDirectory, $dbCopy);
 
         File::deleteDirectory($dumpDirectory);
     }
@@ -221,7 +222,7 @@ class CopyMysqlWithMydumperDynamicCreds implements ShouldQueue
      *
      * @param  array<string, mixed>  $sourceConfig
      */
-    protected function runMydumper(array $sourceConfig, string $dumpDirectory): void
+    protected function runMydumper(array $sourceConfig, string $dumpDirectory, DbCopy $dbCopy): void
     {
         $sourceArgs = $this->buildMysqlCliArgs($sourceConfig, $this->sourceDatabase);
 
@@ -244,6 +245,8 @@ class CopyMysqlWithMydumperDynamicCreds implements ShouldQueue
         if ($mydumperResult->failed()) {
             throw new RuntimeException('mydumper failed with error: '.$mydumperResult->errorOutput());
         }
+
+        $this->createRowsFromDumpFiles($dbCopy, $dumpDirectory);
     }
 
     /**
@@ -274,7 +277,7 @@ class CopyMysqlWithMydumperDynamicCreds implements ShouldQueue
     /**
      * Import each data dump file into the destination database using the mysql client.
      */
-    protected function importDumpDataWithMysql(array $destinationConfig, string $dumpDirectory): void
+    protected function importDumpDataWithMysql(array $destinationConfig, string $dumpDirectory, DbCopy $dbCopy): void
     {
         $destinationArgs = $this->buildMysqlCliArgs($destinationConfig, $this->destinationDatabase);
         $mysqlCommand = array_merge(['mysql'], $destinationArgs);
@@ -290,48 +293,136 @@ class CopyMysqlWithMydumperDynamicCreds implements ShouldQueue
             $result = Process::timeout(0)->input($sql)->run($mysqlCommand);
 
             if ($result->failed()) {
+                DbCopyRow::query()
+                    ->where('db_copy_id', $dbCopy->id)
+                    ->where('dump_file_path', $path)
+                    ->update([
+                        'status' => 'failed',
+                        'error_message' => mb_substr($result->errorOutput(), 0, 1000),
+                    ]);
+
                 throw new RuntimeException(
                     'mysql import failed for '.basename($path).': '.$result->errorOutput()
                 );
+            }
+
+            DbCopyRow::query()
+                ->where('db_copy_id', $dbCopy->id)
+                ->where('dump_file_path', $path)
+                ->update([
+                    'status' => 'imported',
+                    'error_message' => null,
+                ]);
+        }
+    }
+
+    /**
+     * Create DbCopyRow records for each data dump file produced by mydumper.
+     */
+    protected function createRowsFromDumpFiles(DbCopy $dbCopy, string $dumpDirectory): void
+    {
+        $files = File::glob($dumpDirectory.'/*.sql');
+
+        foreach ($files as $path) {
+            if (basename($path) === 'schema.sql') {
+                continue;
+            }
+
+            $filename = pathinfo($path, PATHINFO_FILENAME);
+            $name = str_contains($filename, '.') ? substr($filename, strpos($filename, '.') + 1) : $filename;
+
+            DbCopyRow::query()->create([
+                'db_copy_id' => $dbCopy->id,
+                'name' => $name,
+                'dump_file_path' => $path,
+                'status' => 'dumped',
+            ]);
+        }
+    }
+
+    /**
+     * Verify that all DbCopyRow records have matching counts and sizes after import.
+     */
+    protected function verifyCopiedRows(DbCopy $dbCopy): void
+    {
+        $rows = $dbCopy->rows;
+
+        if ($rows->isEmpty()) {
+            return;
+        }
+
+        $tableNames = $rows->pluck('name')->all();
+
+        $sourceStats = $this->getTableStats(
+            $this->sourceConnection,
+            $this->sourceDatabase,
+            $tableNames
+        );
+
+        $destinationStats = $this->getTableStats(
+            $this->destinationConnection,
+            $this->destinationDatabase,
+            $tableNames
+        );
+
+        foreach ($rows as $row) {
+            $source = $sourceStats[$row->name] ?? null;
+            $destination = $destinationStats[$row->name] ?? null;
+
+            if ($source === null || $destination === null) {
+                throw new RuntimeException('Missing statistics for table '.$row->name);
+            }
+
+            $row->update([
+                'source_row_count' => $source['row_count'],
+                'dest_row_count' => $destination['row_count'],
+                'source_size' => $source['size'],
+                'dest_size' => $destination['size'],
+                'status' => 'verified',
+            ]);
+
+            if ($source['row_count'] !== $destination['row_count']) {
+                throw new RuntimeException('Row count mismatch for '.$row->name);
+            }
+
+            if ($source['size'] !== $destination['size']) {
+                throw new RuntimeException('Row size mismatch for '.$row->name);
             }
         }
     }
 
     /**
-     * Strip SET statements from the header of each dump file in the directory.
+     * Get row count and size statistics for the given tables in a database.
+     *
+     * @param  array<int, string>  $tableNames
+     * @return array<string, array{row_count: int, size: int}>
      */
-    protected function stripDumpFileHeaders(string $dumpDirectory): void
+    protected function getTableStats(string $connectionName, string $database, array $tableNames): array
     {
-        $files = File::glob($dumpDirectory.'/*.sql');
-
-        foreach ($files as $path) {
-            $content = File::get($path);
-            $lines = preg_split('/\r\n|\r|\n/', $content);
-            $filtered = collect($lines)
-                ->values()
-                ->reject(function (string $line, int $index): bool {
-                    $trimmed = trim($line);
-
-                    if ($trimmed === '') {
-                        return false;
-                    }
-
-                    // Only treat the first 50 lines as "header" and strip any
-                    // SET statements (including commented ones) found there.
-                    if ($index < 50 && preg_match('/\bSET\b/i', $trimmed) === 1) {
-                        return true;
-                    }
-
-                    if ($index < 50 && str_starts_with($trimmed, '/*!') && str_contains($trimmed, 'SET ')) {
-                        return true;
-                    }
-
-                    return false;
-                })
-                ->implode("\n");
-
-            File::put($path, $filtered);
+        if ($tableNames === []) {
+            return [];
         }
+
+        $placeholders = implode(',', array_fill(0, count($tableNames), '?'));
+
+        $results = DB::connection($connectionName)->select(
+            "SELECT TABLE_NAME as name, TABLE_ROWS as row_count, DATA_LENGTH + INDEX_LENGTH as size_bytes
+                FROM information_schema.TABLES
+                WHERE TABLE_SCHEMA = ?
+                  AND TABLE_NAME IN ({$placeholders})",
+            array_merge([$database], $tableNames),
+        );
+
+        $stats = [];
+
+        foreach ($results as $result) {
+            $stats[$result->name] = [
+                'row_count' => (int) $result->row_count,
+                'size' => (int) $result->size_bytes,
+            ];
+        }
+
+        return $stats;
     }
 
     /**
