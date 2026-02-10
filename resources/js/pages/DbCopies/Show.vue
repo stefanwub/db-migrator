@@ -37,6 +37,7 @@ type DbCopy = {
 type Props = {
     dbCopy: DbCopy;
     rows: DbCopyRow[];
+    source_total_size_bytes: number;
 };
 
 const props = defineProps<Props>();
@@ -55,6 +56,24 @@ const breadcrumbs: BreadcrumbItem[] = [
 const hasLongError = computed(() => {
     return (props.dbCopy.last_error?.length ?? 0) > 300;
 });
+
+const totalSourceSizeMb = computed(() => {
+    if (!props.source_total_size_bytes) {
+        return 0;
+    }
+
+    return Number((props.source_total_size_bytes / (1024 * 1024)).toFixed(1));
+});
+
+function formatSizeWithMb(bytes: number | null): string {
+    if (!bytes) {
+        return '—';
+    }
+
+    const mb = bytes / (1024 * 1024);
+
+    return `${bytes} (${mb.toFixed(1)} MB)`;
+}
 
 const showErrorModal = ref(false);
 
@@ -149,6 +168,12 @@ function openRowErrorModal(message: string | null) {
                     </div>
                     <div class="mt-1 text-xs text-muted-foreground">
                         {{ dbCopy.dest_connection }}
+                    </div>
+                    <div class="mt-4 text-xs font-medium text-muted-foreground">
+                        Total source size
+                    </div>
+                    <div class="mt-1 text-xs text-muted-foreground">
+                        {{ totalSourceSizeMb }} MB ({{ props.source_total_size_bytes }} bytes)
                     </div>
                 </div>
 
@@ -267,7 +292,7 @@ function openRowErrorModal(message: string | null) {
                                     </div>
                                     <div>
                                         Size:
-                                        {{ row.source_size ?? '—' }}
+                                        {{ formatSizeWithMb(row.source_size) }}
                                     </div>
                                 </td>
                                 <td class="px-4 py-2 text-xs text-muted-foreground">
@@ -277,7 +302,7 @@ function openRowErrorModal(message: string | null) {
                                     </div>
                                     <div>
                                         Size:
-                                        {{ row.dest_size ?? '—' }}
+                                        {{ formatSizeWithMb(row.dest_size) }}
                                     </div>
                                 </td>
                                 <td class="max-w-64 px-4 py-2 text-xs">

@@ -67,6 +67,7 @@ Route::get('db-copies/{dbCopy}', function (Request $request, DbCopy $dbCopy) {
                 'updated_at' => $row->updated_at,
             ];
         }),
+        'source_total_size_bytes' => $dbCopy->rows->sum('source_size'),
     ]);
 })->middleware(['auth', 'verified'])->name('db-copies.show');
 
