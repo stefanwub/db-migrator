@@ -63,6 +63,34 @@ class CopyMysqlWithMydumperDynamicCreds implements ShouldQueue
     }
 
     /**
+     * Handle a job failure that was not caught inside handle().
+     */
+    public function failed(Throwable $e): void
+    {
+        $dbCopy = DbCopy::query()->find($this->dbCopyId);
+
+        if (! $dbCopy) {
+            return;
+        }
+
+        $this->markFailed($dbCopy, $e);
+
+        DbCopyRow::query()
+            ->where('db_copy_id', $dbCopy->id)
+            ->whereNotIn('status', ['imported', 'verified'])
+            ->update([
+                'status' => 'failed',
+                'error_message' => mb_substr($e->getMessage(), 0, 1000),
+            ]);
+
+        try {
+            app(DbCopyWebhookNotifier::class)->notify($dbCopy);
+        } catch (Throwable) {
+            //
+        }
+    }
+
+    /**
      * Mark the DB copy as running.
      */
     protected function markRunning(DbCopy $dbCopy): void
@@ -282,17 +310,36 @@ class CopyMysqlWithMydumperDynamicCreds implements ShouldQueue
     protected function importDumpDataWithMysql(array $destinationConfig, string $dumpDirectory, DbCopy $dbCopy): void
     {
         $destinationArgs = $this->buildMysqlCliArgs($destinationConfig, $this->destinationDatabase);
-        $mysqlCommand = array_merge(['mysql'], $destinationArgs);
+        $mysqlArgs = array_merge(['mysql'], $destinationArgs);
 
         $files = File::glob($dumpDirectory.'/*.sql');
+
+        if ($files === []) {
+            return;
+        }
+
+        // Disable foreign key checks once for the session before imports.
+        $fkOffProcess = Process::timeout(0)->run(array_merge(
+            $mysqlArgs,
+            ['-e', 'SET FOREIGN_KEY_CHECKS=0;'],
+        ));
+
+        if ($fkOffProcess->failed()) {
+            throw new RuntimeException(
+                'mysql failed to disable foreign key checks: '.$fkOffProcess->errorOutput()
+            );
+        }
 
         foreach ($files as $path) {
             if (basename($path) === 'schema.sql') {
                 continue;
             }
 
-            $sql = 'SET FOREIGN_KEY_CHECKS=0;'."\n".File::get($path);
-            $result = Process::timeout(0)->input($sql)->run($mysqlCommand);
+            // Use shell redirection so the SQL file is streamed directly to mysql
+            // by the operating system, avoiding loading large dumps into PHP memory.
+            $commandLine = implode(' ', array_map('escapeshellarg', $mysqlArgs)).' < '.escapeshellarg($path);
+
+            $result = Process::timeout(0)->fromShellCommandline($commandLine)->run();
 
             if ($result->failed()) {
                 DbCopyRow::query()
