@@ -63,6 +63,25 @@ return [
             ]) : [],
         ],
 
+        'staging-cloud-cluster-1' => [
+            'driver' => 'mysql',
+            'host' => env('STAGING_CLOUD_DB_HOST_CLUSTER_1', '127.0.0.1'),
+            'port' => env('STAGING_CLOUD_DB_PORT_CLUSTER_1', '3306'),       
+            'database' => env('STAGING_CLOUD_DB_DATABASE_CLUSTER_1', 'laravel'),
+            'username' => env('STAGING_CLOUD_DB_USERNAME_CLUSTER_1', 'root'),
+            'password' => env('STAGING_CLOUD_DB_PASSWORD_CLUSTER_1', ''),
+            'unix_socket' => env('DB_SOCKET', ''),
+            'charset' => env('DB_CHARSET', 'utf8mb4'),
+            'collation' => env('DB_COLLATION', 'utf8mb4_unicode_ci'),
+            'prefix' => '',
+            'prefix_indexes' => true,
+            'strict' => true,
+            'engine' => null,
+            'options' => extension_loaded('pdo_mysql') ? array_filter([
+                (PHP_VERSION_ID >= 80500 ? \Pdo\Mysql::ATTR_SSL_CA : \PDO::MYSQL_ATTR_SSL_CA) => env('MYSQL_ATTR_SSL_CA'),
+            ]) : [],
+        ],
+
         'cloud-cluster-1' => [
             'driver' => 'mysql',
             'host' => env('CLOUD_DB_HOST_CLUSTER_1', '127.0.0.1'),
@@ -127,6 +146,25 @@ return [
             'database' => env('CLOUD_DB_DATABASE_CLUSTER_4', 'laravel'),
             'username' => env('CLOUD_DB_USERNAME_CLUSTER_4', 'root'),
             'password' => env('CLOUD_DB_PASSWORD_CLUSTER_4', ''),
+            'unix_socket' => env('DB_SOCKET', ''),
+            'charset' => env('DB_CHARSET', 'utf8mb4'),
+            'collation' => env('DB_COLLATION', 'utf8mb4_unicode_ci'),
+            'prefix' => '',
+            'prefix_indexes' => true,
+            'strict' => true,
+            'engine' => null,
+            'options' => extension_loaded('pdo_mysql') ? array_filter([
+                (PHP_VERSION_ID >= 80500 ? \Pdo\Mysql::ATTR_SSL_CA : \PDO::MYSQL_ATTR_SSL_CA) => env('MYSQL_ATTR_SSL_CA'),
+            ]) : [],
+        ],
+
+        'staging-rds-cluster-1' => [
+            'driver' => 'mysql',    
+            'host' => env('STAGING_RDS_DB_HOST_CLUSTER_1', '127.0.0.1'),
+            'port' => env('STAGING_RDS_DB_PORT_CLUSTER_1', '3306'),       
+            'database' => env('STAGING_RDS_DB_DATABASE_CLUSTER_1', 'laravel'),
+            'username' => env('STAGING_RDS_DB_USERNAME_CLUSTER_1', 'root'),
+            'password' => env('STAGING_RDS_DB_PASSWORD_CLUSTER_1', ''),
             'unix_socket' => env('DB_SOCKET', ''),
             'charset' => env('DB_CHARSET', 'utf8mb4'),
             'collation' => env('DB_COLLATION', 'utf8mb4_unicode_ci'),
