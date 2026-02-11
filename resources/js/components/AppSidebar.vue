@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Link } from '@inertiajs/vue3';
-import { BookOpen, Database, Folder, LayoutGrid } from 'lucide-vue-next';
+import { Database, Folder } from 'lucide-vue-next';
 import NavFooter from '@/components/NavFooter.vue';
 import NavMain from '@/components/NavMain.vue';
 import NavUser from '@/components/NavUser.vue';
@@ -18,6 +18,11 @@ import { type NavItem } from '@/types';
 import AppLogo from './AppLogo.vue';
 
 const mainNavItems: NavItem[] = [
+    {
+        title: 'DB Copy Runs',
+        href: '/db-copy-runs',
+        icon: Folder,
+    },
     {
         title: 'DB Copies',
         href: '/db-copies',

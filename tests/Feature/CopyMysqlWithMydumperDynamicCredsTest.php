@@ -91,3 +91,67 @@ it('excludes send_mail_bodies from mydumper data dump', function () {
 
     expect($command)->toContain('--regex=^(?!(source_db.send_mail_bodies$))');
 });
+
+it('selects destination connection with the smallest persisted copy size', function () {
+    Queue::fake();
+
+    $user = User::factory()->create();
+
+    $copyOnMysql = DbCopy::query()->create([
+        'status' => 'succeeded',
+        'progress' => 100,
+        'source_connection' => 'mysql',
+        'source_db' => 'source_mysql',
+        'dest_connection' => 'mysql',
+        'dest_db' => 'dest_mysql',
+        'callback_url' => '',
+        'created_by_user_id' => $user->id,
+    ]);
+
+    DbCopyRow::query()->create([
+        'db_copy_id' => $copyOnMysql->id,
+        'name' => 'table_a',
+        'dump_file_path' => '/tmp/table_a.sql',
+        'status' => 'verified',
+        'source_size' => 8000,
+        'dest_size' => 8000,
+    ]);
+
+    $copyOnCloudCluster = DbCopy::query()->create([
+        'status' => 'succeeded',
+        'progress' => 100,
+        'source_connection' => 'mysql',
+        'source_db' => 'source_cloud_cluster',
+        'dest_connection' => 'cloud-cluster-1',
+        'dest_db' => 'dest_cloud_cluster',
+        'callback_url' => '',
+        'created_by_user_id' => $user->id,
+    ]);
+
+    DbCopyRow::query()->create([
+        'db_copy_id' => $copyOnCloudCluster->id,
+        'name' => 'table_b',
+        'dump_file_path' => '/tmp/table_b.sql',
+        'status' => 'verified',
+        'source_size' => 2000,
+        'dest_size' => 2000,
+    ]);
+
+    $job = new CopyMysqlWithMydumperDynamicCreds(
+        dbCopyId: $copyOnMysql->id,
+        sourceConnection: 'mysql',
+        sourceDatabase: 'source_db',
+        destinationConnection: ['mysql', 'cloud-cluster-1'],
+        destinationDatabase: 'dest_db',
+        threads: 1,
+        recreateDestination: false,
+    );
+
+    $reflection = new ReflectionClass($job);
+    $method = $reflection->getMethod('selectDestinationConnection');
+    $method->setAccessible(true);
+
+    $selected = $method->invoke($job);
+
+    expect($selected)->toBe('cloud-cluster-1');
+});

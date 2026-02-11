@@ -4,6 +4,7 @@ namespace App\Jobs;
 
 use App\Models\DbCopy;
 use App\Models\DbCopyRow;
+use App\Models\DbCopyRun;
 use App\Services\DbCopyWebhookNotifier;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
@@ -24,7 +25,7 @@ class CopyMysqlWithMydumperDynamicCreds implements ShouldQueue
         public string $dbCopyId,
         public string $sourceConnection,
         public string $sourceDatabase,
-        public string $destinationConnection,
+        public string|array $destinationConnection,
         public string $destinationDatabase,
         public int $threads = 8,
         public bool $recreateDestination = true,
@@ -42,6 +43,14 @@ class CopyMysqlWithMydumperDynamicCreds implements ShouldQueue
         }
 
         try {
+            $selectedDestinationConnection = $this->selectDestinationConnection();
+
+            $this->destinationConnection = $selectedDestinationConnection;
+
+            $dbCopy->update([
+                'dest_connection' => $selectedDestinationConnection,
+            ]);
+
             $this->markRunning($dbCopy);
             $notifier->notify($dbCopy);
 
@@ -51,8 +60,10 @@ class CopyMysqlWithMydumperDynamicCreds implements ShouldQueue
 
             $this->markSucceeded($dbCopy);
             $notifier->notify($dbCopy);
+            $this->syncRunStatus($dbCopy);
         } catch (Throwable $e) {
             $this->markFailed($dbCopy, $e);
+            $this->syncRunStatus($dbCopy);
 
             try {
                 $notifier->notify($dbCopy);
@@ -88,6 +99,8 @@ class CopyMysqlWithMydumperDynamicCreds implements ShouldQueue
         } catch (Throwable) {
             //
         }
+
+        $this->syncRunStatus($dbCopy);
     }
 
     /**
@@ -125,6 +138,24 @@ class CopyMysqlWithMydumperDynamicCreds implements ShouldQueue
             'finished_at' => now(),
             'last_error' => mb_substr($e->getMessage(), 0, 1000),
         ]);
+    }
+
+    /**
+     * Sync associated run status from all related copies.
+     */
+    protected function syncRunStatus(DbCopy $dbCopy): void
+    {
+        if ($dbCopy->db_copy_run_id === null) {
+            return;
+        }
+
+        $dbCopyRun = DbCopyRun::query()->find($dbCopy->db_copy_run_id);
+
+        if ($dbCopyRun === null) {
+            return;
+        }
+
+        $dbCopyRun->syncStatusFromCopies();
     }
 
     /**
@@ -569,6 +600,63 @@ class CopyMysqlWithMydumperDynamicCreds implements ShouldQueue
         }
 
         return $stats;
+    }
+
+    /**
+     * Select the destination connection.
+     *
+     * If an array of connections is provided, the connection with the least
+     * currently used data size is selected.
+     */
+    protected function selectDestinationConnection(): string
+    {
+        if (is_string($this->destinationConnection)) {
+            return $this->destinationConnection;
+        }
+
+        if (! is_array($this->destinationConnection) || $this->destinationConnection === []) {
+            throw new RuntimeException('Destination connection list is empty.');
+        }
+
+        $candidates = array_values(array_unique(array_filter(
+            $this->destinationConnection,
+            static fn (mixed $connection): bool => is_string($connection) && $connection !== ''
+        )));
+
+        if ($candidates === []) {
+            throw new RuntimeException('Destination connection list is invalid.');
+        }
+
+        $selectedConnection = null;
+        $smallestUsedSize = null;
+
+        foreach ($candidates as $connection) {
+            $connectionConfig = config("database.connections.{$connection}");
+
+            if (! is_array($connectionConfig)) {
+                throw new RuntimeException("Destination connection [{$connection}] is not configured.");
+            }
+
+            if (($connectionConfig['driver'] ?? null) !== 'mysql') {
+                throw new RuntimeException("Destination connection [{$connection}] must use mysql.");
+            }
+
+            $usedSize = (int) DbCopyRow::query()
+                ->join('db_copies', 'db_copies.id', '=', 'db_copy_rows.db_copy_id')
+                ->where('db_copies.dest_connection', $connection)
+                ->sum(DB::raw('COALESCE(db_copy_rows.dest_size, db_copy_rows.source_size, 0)'));
+
+            if ($smallestUsedSize === null || $usedSize < $smallestUsedSize) {
+                $smallestUsedSize = $usedSize;
+                $selectedConnection = $connection;
+            }
+        }
+
+        if ($selectedConnection === null) {
+            throw new RuntimeException('Could not resolve destination connection.');
+        }
+
+        return $selectedConnection;
     }
 
     /**

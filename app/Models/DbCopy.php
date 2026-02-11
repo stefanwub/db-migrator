@@ -41,6 +41,7 @@ class DbCopy extends Model
         'finished_at',
         'last_error',
         'created_by_user_id',
+        'db_copy_run_id',
     ];
 
     /**
@@ -72,6 +73,14 @@ class DbCopy extends Model
     public function rows(): HasMany
     {
         return $this->hasMany(DbCopyRow::class);
+    }
+
+    /**
+     * Get the run associated with this DB copy.
+     */
+    public function run(): BelongsTo
+    {
+        return $this->belongsTo(DbCopyRun::class, 'db_copy_run_id');
     }
 
     /**
