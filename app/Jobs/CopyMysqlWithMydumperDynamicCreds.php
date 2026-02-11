@@ -193,17 +193,17 @@ class CopyMysqlWithMydumperDynamicCreds implements ShouldQueue
 
         $escapedDatabase = str_replace('`', '``', $this->destinationDatabase);
 
-        if ($this->createDestDbOnLaravelCloud) {
+        // if ($this->createDestDbOnLaravelCloud) {
             $this->createDatabaseOnLaravelCloud((string) $this->destinationConnection, $this->destinationDatabase);
-        } else {
-            if ($this->recreateDestination) {
-                DB::connection($serverConnectionName)
-                    ->statement("DROP DATABASE IF EXISTS `{$escapedDatabase}`");
-            }
+        // } else {
+        //     if ($this->recreateDestination) {
+        //         DB::connection($serverConnectionName)
+        //             ->statement("DROP DATABASE IF EXISTS `{$escapedDatabase}`");
+        //     }
 
-            DB::connection($serverConnectionName)
-                ->statement("CREATE DATABASE IF NOT EXISTS `{$escapedDatabase}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
-        }
+        //     DB::connection($serverConnectionName)
+        //         ->statement("CREATE DATABASE IF NOT EXISTS `{$escapedDatabase}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
+        // }
 
         $destinationConfig['database'] = $this->destinationDatabase;
 
@@ -253,6 +253,8 @@ class CopyMysqlWithMydumperDynamicCreds implements ShouldQueue
                 'Laravel Cloud database creation failed: HTTP '.$response->status().' '.$response->body()
             );
         }
+
+        sleep(2);
     }
 
     /**
