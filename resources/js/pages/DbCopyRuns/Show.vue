@@ -11,6 +11,7 @@ type DbCopyRun = {
     duration_seconds: number | null;
     duration_milliseconds: number | null;
     duration_human: string | null;
+    create_dest_db_on_laravel_cloud: boolean;
     source_system_db_connection: string;
     source_system_db_name: string;
     source_admin_app_connection: string;
@@ -151,6 +152,9 @@ const breadcrumbs: BreadcrumbItem[] = [
                     </div>
                     <div class="mt-2 text-xs text-muted-foreground">
                         {{ props.dbCopyRun.dest_db_connections.join(', ') || '—' }}
+                    </div>
+                    <div class="mt-3 text-xs text-muted-foreground">
+                        Create via Laravel Cloud: {{ props.dbCopyRun.create_dest_db_on_laravel_cloud ? 'Yes' : 'No' }}
                     </div>
                 </div>
             </div>

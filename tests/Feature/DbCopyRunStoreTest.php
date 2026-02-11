@@ -19,6 +19,7 @@ test('authenticated users can create a db copy run', function (): void {
         'dest_db_connections' => ['sqlite'],
         'threads' => 6,
         'recreateDestination' => true,
+        'createDestDbOnLaravelCloud' => true,
     ];
 
     $response = $this->actingAs($user)->post(route('db-copy-runs.store'), $payload);
@@ -30,6 +31,7 @@ test('authenticated users can create a db copy run', function (): void {
     expect($run)->not->toBeNull();
     expect($run?->status)->toBe('queued');
     expect($run?->created_by_user_id)->toBe($user->id);
+    expect($run?->create_dest_db_on_laravel_cloud)->toBeTrue();
     expect($run?->source_system_db_name)->toBe('system_db');
     expect($run?->source_admin_app_name)->toBe('admin_app');
     expect($run?->dest_db_connections)->toBe(['sqlite']);
@@ -40,7 +42,8 @@ test('authenticated users can create a db copy run', function (): void {
         return $job->dbCopyRunId === $run?->id
             && $job->createdByUserId === $user->id
             && $job->threads === 6
-            && $job->recreateDestination;
+            && $job->recreateDestination
+            && $job->createDestDbOnLaravelCloud;
     });
 });
 

@@ -12,6 +12,7 @@ type DbCopyRun = {
     duration_seconds: number | null;
     duration_milliseconds: number | null;
     duration_human: string | null;
+    create_dest_db_on_laravel_cloud: boolean;
     source_system_db_connection: string;
     source_system_db_name: string;
     source_admin_app_connection: string;
@@ -46,6 +47,7 @@ const form = useForm({
     dest_db_connections: [] as string[],
     threads: 8,
     recreateDestination: true,
+    createDestDbOnLaravelCloud: false,
 });
 
 function toggleDestinationConnection(connection: string): void {
@@ -221,6 +223,16 @@ const breadcrumbs: BreadcrumbItem[] = [
                     <div class="md:col-span-2">
                         <label class="inline-flex items-center gap-2 text-sm">
                             <input
+                                v-model="form.createDestDbOnLaravelCloud"
+                                type="checkbox"
+                            />
+                            <span>Create destination DB on Laravel Cloud API</span>
+                        </label>
+                    </div>
+
+                    <div class="md:col-span-2">
+                        <label class="inline-flex items-center gap-2 text-sm">
+                            <input
                                 v-model="form.recreateDestination"
                                 type="checkbox"
                             />
@@ -302,6 +314,12 @@ const breadcrumbs: BreadcrumbItem[] = [
                                     scope="col"
                                     class="px-4 py-2 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground"
                                 >
+                                    Cloud Create
+                                </th>
+                                <th
+                                    scope="col"
+                                    class="px-4 py-2 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground"
+                                >
                                     Copies
                                 </th>
                             </tr>
@@ -360,13 +378,16 @@ const breadcrumbs: BreadcrumbItem[] = [
                                 <td class="px-4 py-2 text-xs text-muted-foreground">
                                     {{ run.dest_db_connections.join(', ') || '—' }}
                                 </td>
+                                <td class="px-4 py-2 text-xs text-muted-foreground">
+                                    {{ run.create_dest_db_on_laravel_cloud ? 'Yes' : 'No' }}
+                                </td>
                                 <td class="px-4 py-2 text-xs">
                                     {{ run.copies_count }}
                                 </td>
                             </tr>
                             <tr v-if="props.dbCopyRuns.data.length === 0">
                                 <td
-                                    colspan="8"
+                                    colspan="9"
                                     class="px-4 py-8 text-center text-sm text-muted-foreground"
                                 >
                                     No DB copy runs yet.

@@ -25,6 +25,7 @@ class DispatchDbCopyRun implements ShouldQueue
         public int $createdByUserId,
         public int $threads = 8,
         public bool $recreateDestination = true,
+        public bool $createDestDbOnLaravelCloud = false,
     ) {}
 
     /**
@@ -76,6 +77,7 @@ class DispatchDbCopyRun implements ShouldQueue
                     destinationDatabase: $systemCopy->dest_db,
                     threads: $this->threads,
                     recreateDestination: $this->recreateDestination,
+                    createDestDbOnLaravelCloud: $this->createDestDbOnLaravelCloud,
                 ),
                 new CopyMysqlWithMydumperDynamicCreds(
                     dbCopyId: $adminAppCopy->id,
@@ -85,12 +87,14 @@ class DispatchDbCopyRun implements ShouldQueue
                     destinationDatabase: $adminAppCopy->dest_db,
                     threads: $this->threads,
                     recreateDestination: $this->recreateDestination,
+                    createDestDbOnLaravelCloud: $this->createDestDbOnLaravelCloud,
                 ),
                 new DispatchDbCopyRunSourceDatabaseCopies(
                     dbCopyRunId: $dbCopyRun->id,
                     createdByUserId: $this->createdByUserId,
                     threads: $this->threads,
                     recreateDestination: $this->recreateDestination,
+                    createDestDbOnLaravelCloud: $this->createDestDbOnLaravelCloud,
                 ),
             ])->dispatch();
         } catch (Throwable $e) {

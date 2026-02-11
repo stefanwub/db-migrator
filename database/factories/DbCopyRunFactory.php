@@ -32,6 +32,7 @@ class DbCopyRunFactory extends Factory
             'source_admin_app_name' => 'admin_app',
             'source_db_connection' => 'mysql-source',
             'dest_db_connections' => ['mysql-dest-a', 'mysql-dest-b'],
+            'create_dest_db_on_laravel_cloud' => false,
             'started_at' => null,
             'finished_at' => null,
             'created_by_user_id' => null,

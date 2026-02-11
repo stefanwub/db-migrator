@@ -10,6 +10,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Process;
 use RuntimeException;
 use Throwable;
@@ -29,6 +30,7 @@ class CopyMysqlWithMydumperDynamicCreds implements ShouldQueue
         public string $destinationDatabase,
         public int $threads = 8,
         public bool $recreateDestination = true,
+        public bool $createDestDbOnLaravelCloud = false,
     ) {}
 
     /**
@@ -191,13 +193,17 @@ class CopyMysqlWithMydumperDynamicCreds implements ShouldQueue
 
         $escapedDatabase = str_replace('`', '``', $this->destinationDatabase);
 
-        if ($this->recreateDestination) {
-            DB::connection($serverConnectionName)
-                ->statement("DROP DATABASE IF EXISTS `{$escapedDatabase}`");
-        }
+        if ($this->createDestDbOnLaravelCloud) {
+            $this->createDatabaseOnLaravelCloud((string) $this->destinationConnection, $this->destinationDatabase);
+        } else {
+            if ($this->recreateDestination) {
+                DB::connection($serverConnectionName)
+                    ->statement("DROP DATABASE IF EXISTS `{$escapedDatabase}`");
+            }
 
-        DB::connection($serverConnectionName)
-            ->statement("CREATE DATABASE IF NOT EXISTS `{$escapedDatabase}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
+            DB::connection($serverConnectionName)
+                ->statement("CREATE DATABASE IF NOT EXISTS `{$escapedDatabase}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
+        }
 
         $destinationConfig['database'] = $this->destinationDatabase;
 
@@ -206,6 +212,47 @@ class CopyMysqlWithMydumperDynamicCreds implements ShouldQueue
         ]);
 
         DB::purge($this->destinationConnection);
+    }
+
+    /**
+     * Create destination database through Laravel Cloud API for the target connection.
+     */
+    protected function createDatabaseOnLaravelCloud(string $connectionName, string $databaseName): void
+    {
+        $apiToken = (string) config('services.laravel_cloud.api_token', '');
+        $baseUrl = 'https://cloud.laravel.com/api/';
+        $endpointTemplate = (string) 'databases/clusters/{cluster_id}/databases';
+        $clusterIdsByConnection = config('services.laravel_cloud.database_cluster_ids', []);
+
+        if (! is_array($clusterIdsByConnection)) {
+            throw new RuntimeException('Laravel Cloud cluster mapping configuration is invalid.');
+        }
+
+        $clusterId = $clusterIdsByConnection[$connectionName] ?? null;
+
+        if (! is_string($clusterId) || $clusterId === '') {
+            throw new RuntimeException("Missing Laravel Cloud cluster id for destination connection [{$connectionName}].");
+        }
+
+        if ($apiToken === '' || $baseUrl === '' || $endpointTemplate === '') {
+            throw new RuntimeException('Laravel Cloud API configuration is incomplete.');
+        }
+
+        $endpoint = str_replace('{cluster_id}', $clusterId, $endpointTemplate);
+        $url = $baseUrl.'/'.ltrim($endpoint, '/');
+
+        $response = Http::withToken($apiToken)
+            ->acceptJson()
+            ->asJson()
+            ->post($url, [
+                'name' => $databaseName,
+            ]);
+
+        if ($response->failed()) {
+            throw new RuntimeException(
+                'Laravel Cloud database creation failed: HTTP '.$response->status().' '.$response->body()
+            );
+        }
     }
 
     /**

@@ -25,6 +25,7 @@ class DispatchDbCopyRunSourceDatabaseCopies implements ShouldQueue
         public int $createdByUserId,
         public int $threads = 8,
         public bool $recreateDestination = true,
+        public bool $createDestDbOnLaravelCloud = false,
     ) {}
 
     /**
@@ -73,6 +74,7 @@ class DispatchDbCopyRunSourceDatabaseCopies implements ShouldQueue
                     destinationDatabase: $dbCopy->dest_db,
                     threads: $this->threads,
                     recreateDestination: $this->recreateDestination,
+                    createDestDbOnLaravelCloud: $this->createDestDbOnLaravelCloud,
                 );
             }
         } catch (Throwable $e) {

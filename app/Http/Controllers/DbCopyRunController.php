@@ -24,6 +24,7 @@ class DbCopyRunController extends Controller
             'source_admin_app_name' => $validated['source_admin_app_name'],
             'source_db_connection' => $validated['source_db_connection'],
             'dest_db_connections' => $validated['dest_db_connections'],
+            'create_dest_db_on_laravel_cloud' => (bool) ($validated['createDestDbOnLaravelCloud'] ?? false),
             'started_at' => null,
             'finished_at' => null,
             'created_by_user_id' => (int) $request->user()->id,
@@ -34,6 +35,7 @@ class DbCopyRunController extends Controller
             createdByUserId: (int) $request->user()->id,
             threads: (int) ($validated['threads'] ?? 8),
             recreateDestination: (bool) ($validated['recreateDestination'] ?? true),
+            createDestDbOnLaravelCloud: (bool) ($validated['createDestDbOnLaravelCloud'] ?? false),
         );
 
         return redirect()

@@ -71,6 +71,10 @@ class DbCopyRunStoreRequest extends FormRequest
                 'nullable',
                 'boolean',
             ],
+            'createDestDbOnLaravelCloud' => [
+                'nullable',
+                'boolean',
+            ],
         ];
     }
 }

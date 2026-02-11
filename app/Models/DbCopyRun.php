@@ -25,6 +25,7 @@ class DbCopyRun extends Model
         'source_admin_app_name',
         'source_db_connection',
         'dest_db_connections',
+        'create_dest_db_on_laravel_cloud',
         'started_at',
         'finished_at',
         'created_by_user_id',
@@ -39,6 +40,7 @@ class DbCopyRun extends Model
     {
         return [
             'dest_db_connections' => 'array',
+            'create_dest_db_on_laravel_cloud' => 'boolean',
             'started_at' => 'immutable_datetime',
             'finished_at' => 'immutable_datetime',
         ];

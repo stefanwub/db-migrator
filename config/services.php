@@ -39,4 +39,9 @@ return [
         'secret' => env('DB_COPY_WEBHOOK_SECRET'),
     ],
 
+    'laravel_cloud' => [
+        'api_token' => env('LARAVEL_CLOUD_API_TOKEN'),
+        'database_cluster_ids' => json_decode((string) env('LARAVEL_CLOUD_DATABASE_CLUSTER_IDS', '{}'), true) ?: [],
+    ],
+
 ];
